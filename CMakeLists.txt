@@ -22,7 +22,7 @@ include_directories(${TensorRT_INCLUDE_DIRS})
 
 include_directories(${OpenCV_INCLUDE_DIRS})
 
-add_executable(TRTFrame main.cpp TRTFrame.cpp Utils.cpp ${TensorRT_SOURCE})
+add_executable(TRTFrame main.cpp TRTFrame.cpp ${TensorRT_SOURCE})
 
 target_link_libraries(TRTFrame ${TensorRT_LIBS} ${OpenCV_LIBS} ${CUDA_LIBRARIES} fmt::fmt nvonnxparser cuda pthread) 
 

@@ -2,7 +2,6 @@
 #include <iostream>
 #include <opencv4/opencv2/opencv.hpp>
 #include <ctime>
-#include "./Utils.hpp"
 using namespace std;
 using namespace cv;
 
@@ -15,11 +14,9 @@ int main()
     cout << "pass" << endl;
     VideoCapture cap("../test.mp4");
 
-    Timer T;
     while (true)
     {
         cap.read(src);
-        T.Start();
         cv::Mat x;
         float fx = (float)src.cols / 640.f, fy = (float)src.rows / 384.f; // 求出resize前的比例，用于之后将四点从标准输入上的尺寸转换到输入上的尺寸
 
@@ -38,7 +35,6 @@ int main()
 
         vector<vector<float>> res;
         trt.NMS(xyxyxyxy, out, res, nmspara{.conf_pos = 8, .box_pos = 0, .conf_thre = 0.1, .iou_thre = 0.4, .has_sigmoid = false});
-        T.End();
         for (auto &r : res)
         {
             line(x_, Point2f(r[0], r[1]), Point2f(r[2], r[3]), Scalar(0, 255, 0), 2);

@@ -68,6 +68,14 @@ TRTFrame::TRTFrame() : outputDims{0, 0, 0}
     outputsz = 0;
 }
 
+/*
+ *  @brief 构造函数，从onnx文件构造引擎
+ *
+ *  @param onnx_file  onnx文件路径
+ *
+ *  @return none
+ *
+ */
 TRTFrame::TRTFrame(const string &onnx_file)
 {
     filesystem::path onnx_file_path(onnx_file);
@@ -75,7 +83,7 @@ TRTFrame::TRTFrame(const string &onnx_file)
     engine_file_path.replace_extension("engine");
     if (filesystem::exists(engine_file_path))
     {
-        auto st = Create_Engine_From_Serialization((const string)engine_file_path.c_str());
+        Create_Engine_From_Serialization((const string)engine_file_path.c_str());
     }
     else
     {
@@ -97,6 +105,14 @@ TRTFrame::TRTFrame(const string &onnx_file)
     Assert((host_buffer = new float[outputsz]) == nullptr);
 }
 
+/*
+ *  @brief 析构函数，释放资源
+ *
+ *  @param none
+ *
+ *  @return none
+ *
+ */
 TRTFrame::~TRTFrame()
 {
     if (host_buffer != nullptr)
@@ -113,7 +129,15 @@ TRTFrame::~TRTFrame()
         delete serialized_engine;
 }
 
-bool TRTFrame::Create_Engine_From_Onnx(const string &onnx_file)
+/*
+ *  @brief 从onnx文件构造引擎
+ *
+ *  @param onnx_file  onnx文件路径
+ *
+ *  @return none
+ *
+ */
+void TRTFrame::Create_Engine_From_Onnx(const string &onnx_file)
 {
     PrintInfo("Create engine from onnx file");
     auto builder = createInferBuilder(gLogger);
@@ -141,10 +165,17 @@ bool TRTFrame::Create_Engine_From_Onnx(const string &onnx_file)
     delete parser;
     delete network;
     delete builder;
-    return true;
 }
 
-bool TRTFrame::Create_Serialized_Engine(const string &onnx_file)
+/*
+ *  @brief 从onnx文件构造序列化的引擎
+ *
+ *  @param onnx_file  onnx文件路径
+ *
+ *  @return none
+ *
+ */
+void TRTFrame::Create_Serialized_Engine(const string &onnx_file)
 {
     PrintInfo("Create serialized_engine from onnx file");
     auto builder = createInferBuilder(gLogger);
@@ -173,10 +204,17 @@ bool TRTFrame::Create_Serialized_Engine(const string &onnx_file)
     delete parser;
     delete network;
     delete builder;
-    return true;
 }
 
-bool TRTFrame::Create_Engine_From_Serialization(const string &onnx_file)
+/*
+ *  @brief 从序列化的引擎文件构造引擎
+ *
+ *  @param onnx_file  序列化的引擎文件路径
+ *
+ *  @return none
+ *
+ */
+void TRTFrame::Create_Engine_From_Serialization(const string &onnx_file)
 {
     PrintInfo("Create engine from serialized_engine file");
     std::ifstream fs(onnx_file, ios::binary);
@@ -190,28 +228,50 @@ bool TRTFrame::Create_Engine_From_Serialization(const string &onnx_file)
     Assert((engine = runtime->deserializeCudaEngine(buffer.get(), sz)) == nullptr);
     buffer.release();
     runtime->destroy();
-    return true;
 }
 
-bool TRTFrame::Save_Serialized_Engine(const string &des)
+/*
+ *  @brief 保存序列化的引擎文件
+ *
+ *  @param des  保存路径
+ *
+ *  @return none
+ *
+ */
+void TRTFrame::Save_Serialized_Engine(const string &des)
 {
     auto buffer_serialized_engine = engine->serialize();
     Assert(buffer_serialized_engine == nullptr);
     ofstream fs(des, ios::binary);
     fs.write(static_cast<const char *>(buffer_serialized_engine->data()), buffer_serialized_engine->size());
     delete buffer_serialized_engine;
-    return true;
 }
 
-bool TRTFrame::Save_Serialized_Engine(IHostMemory *serialized_engine_, const string &des)
+/*
+ *  @brief 保存序列化的引擎文件
+ *
+ *  @param serialized_engine_  序列化的引擎
+ *  @param des  保存路径
+ *
+ *  @return none
+ *
+ */
+void TRTFrame::Save_Serialized_Engine(IHostMemory *serialized_engine_, const string &des)
 {
     Assert(serialized_engine_ == nullptr);
     ofstream fs(des, ios::binary);
     fs.write(static_cast<const char *>(serialized_engine_->data()), serialized_engine_->size());
     delete serialized_engine_;
-    return true;
 }
 
+/*
+ *  @brief 推理
+ *
+ *  @param input_tensor  输入数据
+ *
+ *  @return 输出数据,为vector<float>格式，大小为输出张量的大小
+ *
+ */
 vector<float> TRTFrame::Infer(void *input_tensor)
 {
     cudaMemcpyAsync(device_buffer[0], input_tensor, inputsz * sizeof(float), cudaMemcpyHostToDevice, stream);
@@ -224,6 +284,14 @@ vector<float> TRTFrame::Infer(void *input_tensor)
     return vector<float>(host_buffer, host_buffer + outputsz);
 }
 
+/*
+ *  @brief 计算IOU，格式为xyxyxyxy
+ *
+ *  @param xyxyxyxy1  第一个box的四点坐标
+ *  @param xyxyxyxy2  第二个box的四点坐标
+ *
+ *  @return IOU值
+ */
 float TRTFrame::IOU_xyxyxyxy(float xyxyxyxy1[8], float xyxyxyxy2[8])
 {
     Rect2f box1, box2;
@@ -242,6 +310,15 @@ float TRTFrame::IOU_xyxyxyxy(float xyxyxyxy1[8], float xyxyxyxy2[8])
     return Intersection / Union;
 }
 
+/*
+ *  @brief 计算IOU，格式为xyhw_topl
+ *
+ *  @param xyhw1  第一个box的左上角(top,left)坐标和宽高
+ *  @param xyhw2  第二个box的左上角(top,left)坐标和宽高
+ *
+ *  @return IOU值
+ *
+ */
 float TRTFrame::IOU_xywh_topl(float xyhw1[4], float xyhw2[4])
 {
     Rect2f box1(Point2f(xyhw1[0], xyhw1[1]), Size(xyhw1[3], xyhw1[2]));
@@ -251,6 +328,15 @@ float TRTFrame::IOU_xywh_topl(float xyhw1[4], float xyhw2[4])
     return Intersection / Union;
 }
 
+/*
+ *  @brief 计算IOU，格式为xyhw_center
+ *
+ *  @param xyhw1  第一个box的中心坐标和宽高
+ *  @param xyhw2  第二个box的中心坐标和宽高
+ *
+ *  @return IOU值
+ *
+ */
 float TRTFrame::IOU_xywh_center(float xyhw1[4], float xyhw2[4])
 {
     xyhw1[0] = xyhw1[0] - xyhw1[3] / 2;
@@ -260,6 +346,15 @@ float TRTFrame::IOU_xywh_center(float xyhw1[4], float xyhw2[4])
     return IOU_xywh_topl(xyhw1, xyhw2);
 }
 
+/*
+ *  @brief 计算IOU，格式为xyxy
+ *
+ *  @param xyxy1  第一个box的左上角和右下角坐标
+ *  @param xyxy2  第二个box的左上角和右下角坐标
+ *
+ *  @return IOU值
+ *
+ */
 float TRTFrame::IOU_xyxy(float xyxy1[4], float xyxy2[4])
 {
     Rect2f box1(Point2f(xyxy1[0], xyxy1[1]), Point2f(xyxy1[2], xyxy1[3]));
@@ -270,6 +365,16 @@ float TRTFrame::IOU_xyxy(float xyxy1[4], float xyxy2[4])
     return Intersection / Union;
 }
 
+/*
+ *  @brief 计算IOU
+ *
+ *  @param pts1  第一个box的坐标
+ *  @param pts2  第二个box的坐标
+ *  @param type  坐标格式
+ *
+ *  @return IOU值
+ *
+ */
 float TRTFrame::IOU(float *pts1, float *pts2, box_type type)
 {
     switch (type)
@@ -286,6 +391,17 @@ float TRTFrame::IOU(float *pts1, float *pts2, box_type type)
     return 0.0f;
 }
 
+/*
+ *  @brief 非极大值抑制
+ *
+ *  @param type  坐标格式
+ *  @param output_tensor  输出张量
+ *  @param res_tensor  输出结果
+ *  @param para  非极大值抑制参数
+ *
+ *  @return none
+ *
+ */
 void TRTFrame::NMS(box_type type, vector<float> &output_tensor, vector<vector<float>> &res_tensor, const nmspara &para)
 {
     static_confpos = para.conf_pos;
