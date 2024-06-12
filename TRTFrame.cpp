@@ -15,6 +15,17 @@ using namespace sample;
 
 /*形参包展开，真tm难用*/
 /*注意constexpt使得表达式在编译期确定从而使之无空递归条件*/
+
+/*
+ *  @brief 最大值和最小值求解模板
+ *
+ *  @param firstarg 第一个参数
+ *  @param args     其他参数
+ *
+ *  @return 最大值或最小值
+ *
+ */
+
 template <class T, class... Tp>
 T reduce_max(T firstarg, Tp... args)
 {
@@ -33,6 +44,14 @@ T reduce_min(T firstarg, Tp... args)
         return min(firstarg, reduce_min(args...));
 }
 
+/*
+ *  @brief 打印信息模板
+ *
+ *  @param info 信息字符串
+ *
+ *  @return none
+ *
+ */
 inline void PrintInfo(const char info[])
 {
     printf(__CLEAR__ __FBLUE__ __HIGHLIGHT__
@@ -40,6 +59,14 @@ inline void PrintInfo(const char info[])
            info);
 }
 
+/*
+ *  @brief 获取维度大小
+ *
+ *  @param dims 维度
+ *
+ *  @return 维度大小
+ *
+ */
 size_t get_dims_size(Dims dims)
 {
     size_t size = 1;
@@ -50,6 +77,14 @@ size_t get_dims_size(Dims dims)
     return size;
 }
 
+/*
+ *  @brief sigmoid函数模板
+ *
+ *  @param 未经过sigmoid函数的模型输出量
+ *
+ *  @return sigmoid函数输出量
+ *
+ */
 inline constexpr float inv_sigmoid(float x)
 {
     return -log(1 / x - 1);
@@ -221,12 +256,12 @@ void TRTFrame::Create_Engine_From_Serialization(const string &onnx_file)
     fs.seekg(0, ios::end);
     size_t sz = fs.tellg();
     fs.seekg(0, ios::beg);
-    auto buffer = make_unique<char[]>(sz);
-    fs.read(buffer.get(), sz);
+    char *buffer = new char[sz];
+    fs.read(buffer, sz);
     auto runtime = createInferRuntime(gLogger);
     Assert(runtime == nullptr);
-    Assert((engine = runtime->deserializeCudaEngine(buffer.get(), sz)) == nullptr);
-    buffer.release();
+    Assert((engine = runtime->deserializeCudaEngine(buffer, sz)) == nullptr);
+    delete[] buffer;
     runtime->destroy();
 }
 
@@ -265,14 +300,14 @@ void TRTFrame::Save_Serialized_Engine(IHostMemory *serialized_engine_, const str
 }
 
 /*
- *  @brief 推理
+ *  @brief 推理,并将结果存入private成员host_buffer中
  *
  *  @param input_tensor  输入数据
  *
- *  @return 输出数据,为vector<float>格式，大小为输出张量的大小
+ *  @return none
  *
  */
-vector<float> TRTFrame::Infer(void *input_tensor)
+void TRTFrame::Infer(void *input_tensor)
 {
     cudaMemcpyAsync(device_buffer[0], input_tensor, inputsz * sizeof(float), cudaMemcpyHostToDevice, stream);
     context->setOptimizationProfileAsync(0, stream);
@@ -281,7 +316,6 @@ vector<float> TRTFrame::Infer(void *input_tensor)
     Assert(context->enqueueV3(stream) == false);
     cudaMemcpyAsync(host_buffer, device_buffer[1], outputsz * sizeof(float), cudaMemcpyDeviceToHost, stream);
     cudaStreamSynchronize(stream);
-    return vector<float>(host_buffer, host_buffer + outputsz);
 }
 
 /*
@@ -392,9 +426,8 @@ float TRTFrame::IOU(float *pts1, float *pts2, box_type type)
 }
 
 /*
- *  @brief 非极大值抑制
+ *  @brief 非极大值抑制，输入采用外部数据
  *
- *  @param type  坐标格式
  *  @param output_tensor  输出张量
  *  @param res_tensor  输出结果
  *  @param para  非极大值抑制参数
@@ -402,26 +435,24 @@ float TRTFrame::IOU(float *pts1, float *pts2, box_type type)
  *  @return none
  *
  */
-void TRTFrame::NMS(box_type type, vector<float> &output_tensor, vector<vector<float>> &res_tensor, const nmspara &para)
+void TRTFrame::NMS(vector<float> &output_tensor, vector<vector<float>> &res_tensor, const NmsParam &param)
 {
-    static_confpos = para.conf_pos;
-    float conf_thre;
-    if (!para.has_sigmoid)
-        conf_thre = inv_sigmoid(para.conf_thre);
-    int box_buffer_len = (type == xyxyxyxy ? 8 : 4);
+    float conf_thre = param.conf_thre;
+    if (!param.has_sigmoid)
+        conf_thre = inv_sigmoid(param.conf_thre);
     res_tensor.clear();
     vector<vector<float>> tmp_store;
     for (int i = 0; i < outputDims.dim2; i++)
     {
-        if (output_tensor[i * outputDims.dim3 + static_confpos] < conf_thre)
+        if (output_tensor[i * outputDims.dim3 + param.conf_pos] < param.conf_thre)
             continue;
         tmp_store.emplace_back(
             vector<float>(output_tensor.begin() + i * outputDims.dim3,
                           output_tensor.begin() + i * outputDims.dim3 + outputDims.dim3));
     }
     sort(tmp_store.begin(), tmp_store.end(),
-         [](vector<float> box1, vector<float> box2)
-         { return box1[static_confpos] > box2[static_confpos]; });
+         [&param](vector<float> box1, vector<float> box2)
+         { return box1[param.conf_pos] > box2[param.conf_pos]; });
     vector<float> Res;
     vector<bool> Removed(outputDims.dim2, false);
     for (int i = 0; i < tmp_store.size(); i++)
@@ -437,11 +468,54 @@ void TRTFrame::NMS(box_type type, vector<float> &output_tensor, vector<vector<fl
         {
             if (!Removed[j])
             {
-                float iou = IOU(&Res[0] + para.box_pos, &tmp_store[j][0] + para.box_pos, type);
-                if (iou > para.iou_thre)
+                float iou = IOU(&Res[0] + param.box_pos, &tmp_store[j][0] + param.box_pos, param.type);
+                if (iou > param.iou_thre)
                     Removed[j] = true;
             }
         }
         res_tensor.emplace_back(Res);
     }
+}
+
+/*
+ *  @brief 非极大值抑制，输入采用私有变量host_buffer
+ *
+ *  @param res_tensor  NMS后的各个tensor的信息
+ *  @param param  NMS参数
+ *
+ *  @return none
+ */
+void TRTFrame::NMS(vector<vector<float>> &res_tensor, const NmsParam &param)
+{
+    Assert(host_buffer == nullptr);
+    float conf_thre = param.conf_thre;
+    if (!param.has_sigmoid)
+        conf_thre = inv_sigmoid(param.conf_thre);
+    res_tensor.clear();
+    for (int i = 0; i < outputDims.dim2; i++)
+    {
+        if (host_buffer[i * outputDims.dim3 + param.conf_pos] < conf_thre)
+            continue;
+        else
+            res_tensor.emplace_back(host_buffer + i * outputDims.dim3, host_buffer + i * outputDims.dim3 + outputDims.dim3);
+    }
+    sort(res_tensor.begin(), res_tensor.end(),
+         [&param](vector<float> box1, vector<float> box2)
+         { return box1[param.conf_pos] > box2[param.conf_pos]; });
+    vector<bool> removed(res_tensor.size(), false);
+    for (int i = 0; i < res_tensor.size(); i++)
+    {
+        if (removed[i])
+            continue;
+        for (int j = i + 1; j < res_tensor.size(); j++)
+        {
+            if (IOU(&res_tensor[i][param.box_pos], &res_tensor[j][param.box_pos], param.type) > param.iou_thre)
+                removed[j] = true;
+        }
+    }
+    int back_idx = 0;
+    for (int i = 0; i < res_tensor.size(); i++)
+        if (removed[i])
+            swap(res_tensor[i], *(&res_tensor.back() - back_idx++));
+    res_tensor.erase(res_tensor.end() - back_idx, res_tensor.end());
 }
