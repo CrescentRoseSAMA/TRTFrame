@@ -5,14 +5,14 @@
 #include <map>
 #include "/home/ruby/Tensorrt/trt/include/NvInfer.h"
 const cv::Scalar myColor[3]{cv::Scalar(255, 0, 0), cv::Scalar(0, 0, 255), cv::Scalar(0, 255, 0)};
-const int MODEL_WIDTH = 320;
-const int MODEL_HEIGHT = 320;
-const std::vector<int> STRIDES = {8, 16, 32};
+const int MODEL_WIDTH = 320;                  // 模型输入的宽度
+const int MODEL_HEIGHT = 320;                 // 模型输入的高度
+const std::vector<int> STRIDES = {8, 16, 32}; // 模型的下采样步长
 
 const std::vector<std::vector<std::pair<float, float>>> ANCHORS = {
     {{10, 13}, {16, 30}, {33, 23}},
     {{30, 61}, {62, 45}, {59, 119}},
-    {{116, 90}, {156, 198}, {373, 326}}};
+    {{116, 90}, {156, 198}, {373, 326}}}; // 每个特征图对应的anchor box尺寸
 class yolov5OutputDecoder
 {
     using pairFloat = std::pair<float, float>;
@@ -74,7 +74,7 @@ enum box_type
  *         conf_thre: 置信度阈值
  *         iou_thre: IOU阈值
  *         has_sigmoid: 网络的输出是否经过sigmoid激活
- *         isAnchor: 是否需要对box进行anchor转换
+ *         isAnchor: 是否需要对box进行anchor转换(yolov5特性)
  *         classes_info: 类别信息
  */
 

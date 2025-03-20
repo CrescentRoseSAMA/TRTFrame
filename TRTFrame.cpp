@@ -816,7 +816,7 @@ void yolov5OutputDecoder::generateGrid(int width, int height, vector<yolov5Outpu
     }
 }
 
-/*  写在前面，这是一个用于从yolov5的xywh格式进行解码的函数
+/*  写在前面，这是一个用于从yolov5的xywh格式进行解码的函数, 具体的讲解见博客[https://www.cnblogs.com/CrescentWind/p/18676617]
  *
  *  记录一下为何需要这个函数
  *
